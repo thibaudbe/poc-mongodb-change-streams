@@ -1,0 +1,8 @@
+version: "2.1"
+services:
+  mongo:
+    image: zadki3l/mongodb-oplog
+    ports:
+      - "0.0.0.0:27017:27017"
+    volumes:
+      - docker/data:/data/db
