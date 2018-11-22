@@ -1,1 +1,5 @@
-docker/data
+.DS_STORE
+
+.env
+data/
+log/

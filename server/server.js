@@ -2,72 +2,61 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const mongoose = require('mongoose')
 const api = require('./routes/api')
-// const pusherRoute = require('./routes/pusher')
-// const Pusher = require('pusher')
 
-require('dotenv').config()
+require('dotenv').config({ path: '../.env' })
 
-// const pusher = new Pusher({
-//   appId      : process.env.PUSHER_APP_ID,
-//   key        : process.env.PUSHER_APP_KEY,
-//   secret     : process.env.PUSHER_APP_SECRET,
-//   cluster    : process.env.PUSHER_APP_CLUSTER,
-//   encrypted  : true,
-// })
-// const channel = 'tasks'
+const appPort = process.env.PORT
+const mongoPort = process.env.MONGO_PORT
+const mongoHost = process.env.MONGO_HOST
+const mongoUser = process.env.MONGO_USER
+const mongoPass = process.env.MONGO_PASS
+const mongoDb = process.env.MONGO_DATABASE
+const mongoUrl = `mongodb://${mongoUser}:${mongoPass}@${mongoHost}:${mongoPort}/${mongoDb}`
 
 const app = express()
 
 app.use((_req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*")
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept')
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
   next()
 })
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use('/api', api)
-// app.use('/pusher', pusherRoute)
 
-mongoose.connect(process.env.MONGODB_URL, function(err) {
+const options = { useNewUrlParser: true }
+
+// Async connection
+// async function runDb() {
+//   try {
+//     await mongoose.connect(mongoUrl, options)
+//   } catch (error) {
+//     throw error
+//   }
+// }
+// runDb()
+
+mongoose.connect(mongoUrl, options, (err) => {
   if (err) {
-    console.log(err)
+    throw err
   }
 })
 
 const db = mongoose.connection
 
-db.on('error', console.error.bind(console, 'Connection Error:'))
-
 db.once('open', () => {
-  app.listen(9000, () => {
-    console.log('Node server running on port 9000')
+  console.log('> mongodb opened')
+
+  app.listen(appPort, () => {
+    console.log(`Node server running on port ${appPort}`)
   })
 
   const taskCollection = db.collection('tasks')
   const changeStream = taskCollection.watch()
 
   changeStream.on('change', (change) => {
-    if(change.operationType === 'insert') {
-      console.log('> [INSERT]', change.fullDocument)
-      // pusher.trigger(
-      //   channel,
-      //   'inserted',
-      //   {
-      //     _id: task._id,
-      //     name: task.name,
-      //     task: task.task,
-      //     type: task.type,
-      //   }
-      // )
-    } else if(change.operationType === 'delete') {
-      console.log('> [DELETED]', change.documentKey)
-      // pusher.trigger(
-      //   channel,
-      //   'deleted',
-      //   change.documentKey._id
-      // )
-    }
+    console.log(`> [${change.operationType}]`, change.documentKey)
   })
 })

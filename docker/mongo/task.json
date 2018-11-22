@@ -1,0 +1,16 @@
+[
+  {
+    "_id" : ObjectId("5c0a7854c1a5004c57c7ccc5"),
+    "name" : "Blue",
+    "task" : "Do this",
+    "type" : "task",
+    "__v" : 0
+  },
+  {
+    "_id" : ObjectId("5c0a785cc1a5004c57c7ccc6"),
+    "name" : "Red",
+    "task" : "Remind me of",
+    "type" : "task",
+    "__v" : 0
+  }
+]
