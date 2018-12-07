@@ -8,7 +8,7 @@ Using
 
 ## Setup
 
-Copy env vars
+First, copy env vars
 ```
 cp .env.sample .env
 ```
@@ -16,6 +16,16 @@ cp .env.sample .env
 Start docker
 ```
 docker-compose up
+```
+
+Start client (dev)
+```
+cd client && npm start
+```
+
+Start server (dev)
+```
+cd server && npm start
 ```
 
 ## Test vars
