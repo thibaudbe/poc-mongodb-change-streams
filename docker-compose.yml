@@ -3,7 +3,7 @@ version: "3.7"
 services:
   mongo:
     image: mongo:4
-    container_name: mongo
+    container_name: todolist-mongo
     build: ./docker/mongo
     ports:
       - 27017:${MONGO_PORT}
