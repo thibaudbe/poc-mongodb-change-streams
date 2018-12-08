@@ -1,9 +1,12 @@
 import React, { Component } from 'react'
+import * as io from 'socket.io-client'
 import './App.css'
 
-const API_URL = 'http://localhost:9000/api/'
+const SERVER_URL = 'http://localhost:9000'
+const API_URL = SERVER_URL + '/api/'
 
 class App extends Component {
+  socket = io.connect(SERVER_URL)
 
   constructor(props) {
     super(props)
@@ -14,6 +17,70 @@ class App extends Component {
     }
   }
 
+  componentDidMount() {
+    this.syncTasks()
+
+    this.socket.on('task', ({ type, data }) => {
+      const maybeTask = this.state.tasks.find(_ => _._id === data._id)
+
+      switch (type) {
+        case 'delete': {
+          if (maybeTask !== undefined) {
+            this.removeTask(data._id)
+          } else {
+            console.error('socket error remove task')
+          }
+          break
+        }
+        case 'insert': {
+          if (maybeTask === undefined) {
+            this.addTask(data)
+          } else {
+            console.error('socket error add task')
+          }
+          break
+        }
+        case 'update':
+        case 'replace': {
+          if (maybeTask !== undefined && JSON.stringify(data) !== JSON.stringify(maybeTask)) {
+            this.editTask(data)
+          } else {
+            console.error('socket error edit task')
+          }
+          break
+        }
+        default: {
+          console.log('unhandled operationType', type, data)
+          break
+        }
+      }
+      this.setState({ ticker: data })
+    })
+  }
+
+  componentWillUnmount() {
+    this.socket.close()
+  }
+
+  render() {
+    let tasks = this.state.tasks.map(item =>
+      <Task key={item._id} task={item} onTaskClick={this.onDeleteTask} />
+    )
+
+    return (
+      <div className="todo-wrapper">
+        <form>
+          <input type="text" className="input-name" placeholder="Set name" onChange={this.updateName} value={this.state.name} />
+          <input type="text" className="input-todo" placeholder="New task" onChange={this.updateText} value={this.state.task} />
+          <button className="btn-add" onClick={this.onCreateTask}>+</button>
+        </form>
+        <ul>
+          {tasks}
+        </ul>
+      </div>
+    )
+  }
+
   updateName = (e) => {
     this.setState({ name: e.target.value })
   }
@@ -22,7 +89,37 @@ class App extends Component {
     this.setState({ task: e.target.value })
   }
 
-  postTask = (e) => {
+  addTask = (newTask) => {
+    console.log('caught new task event: ' + newTask._id)
+    this.setState(prevState => ({
+      tasks: prevState.tasks.concat(newTask),
+      task: '',
+      name: ''
+    }))
+  }
+
+  editTask = (editedTask) => {
+    console.log('caught new task event: ' + editedTask._id)
+    this.setState(prevState => ({
+      tasks: prevState.tasks.map(_ => _._id === editedTask._id ? editedTask : _),
+    }))
+  }
+
+  removeTask = (id) => {
+    console.log('caught remove event: ' + id)
+    this.setState(prevState => ({
+      tasks: prevState.tasks.filter(el => el._id !== id)
+    }))
+  }
+
+  syncTasks = () => {
+    fetch(API_URL)
+      .then((res) => res.json())
+      .then(tasks => this.setState({ tasks }))
+      .catch(console.error)
+  }
+
+  onCreateTask = (e) => {
     e.preventDefault()
     if (!this.state.task.length) {
       return
@@ -46,56 +143,12 @@ class App extends Component {
       .catch(console.error)
   }
 
-  syncTasks = () => {
-    fetch(API_URL)
-      .then((res) => res.json())
-      .then(tasks => this.setState({ tasks }))
-      .catch(console.error)
-  }
-
-  deleteTask = (id) => {
+  onDeleteTask = (id) => {
     fetch(API_URL + id, { method: 'delete' })
       .then((_) => this.removeTask(id))
       .catch(console.error)
   }
 
-  addTask = (newTask) => {
-    console.log('caught new task event: ' + newTask._id)
-    this.setState(prevState => ({
-      tasks: prevState.tasks.concat(newTask),
-      task: ''
-    }))
-  }
-
-  removeTask = (id) => {
-    console.log('caught remove event: ' + id)
-    this.setState(prevState => ({
-      tasks: prevState.tasks.filter(el => el._id !== id)
-    }))
-  }
-
-  componentDidMount() {
-    this.syncTasks()
-  }
-
-  render() {
-    let tasks = this.state.tasks.map(item =>
-      <Task key={item._id} task={item} onTaskClick={this.deleteTask} />
-    )
-
-    return (
-      <div className="todo-wrapper">
-        <form>
-          <input type="text" className="input-name" placeholder="Set name" onChange={this.updateName} value={this.state.name} />
-          <input type="text" className="input-todo" placeholder="New task" onChange={this.updateText} value={this.state.task} />
-          <button className="btn-add" onClick={this.postTask}>+</button>
-        </form>
-        <ul>
-          {tasks}
-        </ul>
-      </div>
-    )
-  }
 }
 
 class Task extends Component {

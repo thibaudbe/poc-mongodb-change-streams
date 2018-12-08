@@ -14,6 +14,8 @@ const mongoDb = process.env.MONGO_DATABASE
 const mongoUrl = `mongodb://${mongoUser}:${mongoPass}@${mongoHost}:${mongoPort}/${mongoDb}`
 
 const app = express()
+const server = require('http').createServer(app)
+const socketIo = require('socket.io')(server)
 
 app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*')
@@ -39,9 +41,7 @@ const options = { useNewUrlParser: true }
 // runDb()
 
 mongoose.connect(mongoUrl, options, (err) => {
-  if (err) {
-    throw err
-  }
+  if (err) throw err
 })
 
 const db = mongoose.connection
@@ -49,14 +49,34 @@ const db = mongoose.connection
 db.once('open', () => {
   console.log('> mongodb opened')
 
-  app.listen(appPort, () => {
+  server.listen(appPort, () => {
     console.log(`Node server running on port ${appPort}`)
   })
 
   const taskCollection = db.collection('tasks')
   const changeStream = taskCollection.watch()
 
-  changeStream.on('change', (change) => {
-    console.log(`> [${change.operationType}]`, change.documentKey)
+  socketIo.on('connect', (socket) => {
+    console.info('🖥', '→ 1 client connected')
+
+    changeStream.on('change', (change) => {
+      switch (change.operationType) {
+        case 'delete':
+        case 'insert':
+        case 'update':
+        case 'replace':
+          socket.emit('task', { type: change.operationType, data: change.fullDocument || change.documentKey })
+          break;
+        default:
+          console.log('unhandled operationType', change.operationType, change.fullDocument || change.documentKey)
+          break;
+      }
+    })
+
+    socket.on('disconnect', () => {
+      console.info('🖥', '← 1 client disconnected')
+      socket.removeAllListeners()
+    })
   })
+
 })
