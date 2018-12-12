@@ -1,6 +1,9 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const mongoose = require('mongoose')
+// https://www.npmjs.com/package/amqp
+const amqp = require('amqplib/callback_api')
+
 const api = require('./routes/api')
 
 require('dotenv').config({ path: '../.env' })
@@ -44,39 +47,40 @@ mongoose.connect(mongoUrl, options, (err) => {
   if (err) throw err
 })
 
-const db = mongoose.connection
+const rabbitUser = process.env.RABBITMQ_DEFAULT_USER
+const rabbitPass = process.env.RABBITMQ_DEFAULT_PASS
+const rabbitVhost = process.env.RABBITMQ_DEFAULT_VHOST
+const rabbitUrl = `amqp://${rabbitUser}:${rabbitPass}@localhost${rabbitVhost}`
 
-db.once('open', () => {
-  console.log('> mongodb opened')
+amqp.connect(rabbitUrl, (err, conn) => {
+  if (err) throw err
 
-  server.listen(appPort, () => {
-    console.log(`Node server running on port ${appPort}`)
-  })
+  conn.createChannel((err, ch) => {
+    if (err) throw err
 
-  const taskCollection = db.collection('tasks')
-  const changeStream = taskCollection.watch()
+    const q = 'taskQueue'
+    // enable "durable", RabbitMQ will never lose the queue
+    ch.assertQueue(q, { durable: false })
+    // pair dispatch
+    // ch.prefetch(1)
 
-  socketIo.on('connect', (socket) => {
-    console.info('🖥', '→ 1 client connected')
-
-    changeStream.on('change', (change) => {
-      switch (change.operationType) {
-        case 'delete':
-        case 'insert':
-        case 'update':
-        case 'replace':
-          socket.emit('task', { type: change.operationType, data: change.fullDocument || change.documentKey })
-          break;
-        default:
-          console.log('unhandled operationType', change.operationType, change.fullDocument || change.documentKey)
-          break;
-      }
+    server.listen(appPort, () => {
+      console.log(`Node server running on port ${appPort}`)
     })
 
-    socket.on('disconnect', () => {
-      console.info('🖥', '← 1 client disconnected')
-      socket.removeAllListeners()
+    socketIo.on('connect', (socket) => {
+      console.info('🖥', '→ 1 client connected')
+
+      ch.consume(q, (msg) => {
+        // socket.emit('task', msg.content.toJSON())
+        socket.emit('task', { type: 'test', data: msg.content.toString() })
+        console.log(' [x] Received %s', msg.content.toString())
+      }, { noAck: true })
+
+      socket.on('disconnect', () => {
+        console.info('🖥', '← 1 client disconnected')
+        socket.removeAllListeners()
+      })
     })
   })
-
 })
