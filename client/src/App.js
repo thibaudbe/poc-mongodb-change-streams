@@ -21,6 +21,7 @@ class App extends Component {
     this.syncTasks()
 
     this.socket.on('task', ({ type, data }) => {
+      console.log(' [x] Received %s', { type, data })
       const maybeTask = this.state.tasks.find(_ => _._id === data._id)
 
       switch (type) {

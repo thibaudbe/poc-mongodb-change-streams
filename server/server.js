@@ -1,6 +1,8 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const mongoose = require('mongoose')
+const jackrabbit = require('jackrabbit')
+
 const api = require('./routes/api')
 
 require('dotenv').config({ path: '../.env' })
@@ -30,7 +32,7 @@ app.use('/api', api)
 
 const options = { useNewUrlParser: true }
 
-// Async connection
+// Asynchronous connection
 // async function runDb() {
 //   try {
 //     await mongoose.connect(mongoUrl, options)
@@ -40,43 +42,38 @@ const options = { useNewUrlParser: true }
 // }
 // runDb()
 
+// Synchronous connection
 mongoose.connect(mongoUrl, options, (err) => {
   if (err) throw err
 })
 
-const db = mongoose.connection
+const rabbitUser = process.env.RABBITMQ_DEFAULT_USER
+const rabbitPass = process.env.RABBITMQ_DEFAULT_PASS
+const rabbitVhost = process.env.RABBITMQ_DEFAULT_VHOST
+const rabbitUrl = `amqp://${rabbitUser}:${rabbitPass}@localhost${rabbitVhost}`
 
-db.once('open', () => {
-  console.log('> mongodb opened')
+const rabbit = jackrabbit(rabbitUrl)
 
-  server.listen(appPort, () => {
-    console.log(`Node server running on port ${appPort}`)
-  })
-
-  const taskCollection = db.collection('tasks')
-  const changeStream = taskCollection.watch()
-
-  socketIo.on('connect', (socket) => {
-    console.info('🖥', '→ 1 client connected')
-
-    changeStream.on('change', (change) => {
-      switch (change.operationType) {
-        case 'delete':
-        case 'insert':
-        case 'update':
-        case 'replace':
-          socket.emit('task', { type: change.operationType, data: change.fullDocument || change.documentKey })
-          break;
-        default:
-          console.log('unhandled operationType', change.operationType, change.fullDocument || change.documentKey)
-          break;
-      }
-    })
-
-    socket.on('disconnect', () => {
-      console.info('🖥', '← 1 client disconnected')
-      socket.removeAllListeners()
-    })
-  })
-
+server.listen(appPort, () => {
+  console.log(`Node server running on port ${appPort}`)
 })
+
+socketIo.on('connect', (socket) => {
+  console.info('🖥', ' → 1 client connected')
+
+  const queueName = 'taskQueue'
+  const exchange = rabbit.default()
+  // enable "durable", RabbitMQ will never lose the queue
+  const taskQueue = exchange.queue({ name: queueName, durable: false })
+  taskQueue.consume(onMessage, { noAck: true })
+
+  socket.on('disconnect', () => {
+    console.info('🖥', ' ← 1 client disconnected')
+    socket.removeAllListeners()
+  })
+})
+
+function onMessage(message) {
+  console.log(' [x] Received', message)
+  socketIo.emit('task', message)
+}
