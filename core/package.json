@@ -8,8 +8,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "amqplib": "0.5.3",
     "dotenv": "6.1.0",
+    "jackrabbit": "4.4.0",
     "mongoose": "5.3.14"
   }
 }

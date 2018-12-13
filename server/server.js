@@ -1,8 +1,7 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const mongoose = require('mongoose')
-// https://www.npmjs.com/package/amqp
-const amqp = require('amqplib/callback_api')
+const jackrabbit = require('jackrabbit')
 
 const api = require('./routes/api')
 
@@ -33,7 +32,7 @@ app.use('/api', api)
 
 const options = { useNewUrlParser: true }
 
-// Async connection
+// Asynchronous connection
 // async function runDb() {
 //   try {
 //     await mongoose.connect(mongoUrl, options)
@@ -43,6 +42,7 @@ const options = { useNewUrlParser: true }
 // }
 // runDb()
 
+// Synchronous connection
 mongoose.connect(mongoUrl, options, (err) => {
   if (err) throw err
 })
@@ -52,34 +52,28 @@ const rabbitPass = process.env.RABBITMQ_DEFAULT_PASS
 const rabbitVhost = process.env.RABBITMQ_DEFAULT_VHOST
 const rabbitUrl = `amqp://${rabbitUser}:${rabbitPass}@localhost${rabbitVhost}`
 
-amqp.connect(rabbitUrl, (err, conn) => {
-  if (err) throw err
+const rabbit = jackrabbit(rabbitUrl)
 
-  conn.createChannel((err, channel) => {
-    if (err) throw err
+server.listen(appPort, () => {
+  console.log(`Node server running on port ${appPort}`)
+})
 
-    const q = 'taskQueue'
-    // enable "durable", RabbitMQ will never lose the queue
-    channel.assertQueue(q, { durable: false })
-    // pair dispatch
-    // ch.prefetch(1)
+socketIo.on('connect', (socket) => {
+  console.info('🖥', ' → 1 client connected')
 
-    server.listen(appPort, () => {
-      console.log(`Node server running on port ${appPort}`)
-    })
+  const queueName = 'taskQueue'
+  const exchange = rabbit.default()
+  // enable "durable", RabbitMQ will never lose the queue
+  const taskQueue = exchange.queue({ name: queueName, durable: false })
+  taskQueue.consume(onMessage, { noAck: true })
 
-    socketIo.on('connect', (socket) => {
-      console.info('🖥', ' → 1 client connected')
-
-      channel.consume(q, (msg) => {
-        console.log(' [x] Received', JSON.parse(msg.content))
-        socketIo.emit('task', JSON.parse(msg.content))
-      }, { noAck: true })
-
-      socket.on('disconnect', () => {
-        console.info('🖥', ' ← 1 client disconnected')
-        socket.removeAllListeners()
-      })
-    })
+  socket.on('disconnect', () => {
+    console.info('🖥', ' ← 1 client disconnected')
+    socket.removeAllListeners()
   })
 })
+
+function onMessage(message) {
+  console.log(' [x] Received', message)
+  socketIo.emit('task', message)
+}
