@@ -55,12 +55,12 @@ const rabbitUrl = `amqp://${rabbitUser}:${rabbitPass}@localhost${rabbitVhost}`
 amqp.connect(rabbitUrl, (err, conn) => {
   if (err) throw err
 
-  conn.createChannel((err, ch) => {
+  conn.createChannel((err, channel) => {
     if (err) throw err
 
     const q = 'taskQueue'
     // enable "durable", RabbitMQ will never lose the queue
-    ch.assertQueue(q, { durable: false })
+    channel.assertQueue(q, { durable: false })
     // pair dispatch
     // ch.prefetch(1)
 
@@ -69,16 +69,15 @@ amqp.connect(rabbitUrl, (err, conn) => {
     })
 
     socketIo.on('connect', (socket) => {
-      console.info('🖥', '→ 1 client connected')
+      console.info('🖥', ' → 1 client connected')
 
-      ch.consume(q, (msg) => {
-        // socket.emit('task', msg.content.toJSON())
-        socket.emit('task', { type: 'test', data: msg.content.toString() })
-        console.log(' [x] Received %s', msg.content.toString())
+      channel.consume(q, (msg) => {
+        console.log(' [x] Received', JSON.parse(msg.content))
+        socketIo.emit('task', JSON.parse(msg.content))
       }, { noAck: true })
 
       socket.on('disconnect', () => {
-        console.info('🖥', '← 1 client disconnected')
+        console.info('🖥', ' ← 1 client disconnected')
         socket.removeAllListeners()
       })
     })
