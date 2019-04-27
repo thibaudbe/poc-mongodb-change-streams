@@ -26,4 +26,4 @@ mongoimport \
 
 echo "$(date +"%T") [] ***** ALL DONE *****"
 
-touch /data/db/"$MONGO_DATABASE"-data-initialized
+touch /data/db/$MONGO_DATABASE-data-initialized
